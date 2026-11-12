@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>照片地图</title>
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/vendor/leaflet/leaflet.js" defer></script>
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <main class="app">
+    <aside class="sidebar" aria-label="照片文件夹">
+      <header class="sidebar-header">
+        <span class="brand-mark" aria-hidden="true"><i></i></span>
+        <h1>照片地图</h1>
+        <button class="button secondary mobile-only" id="toggle-folders" type="button"
+                aria-controls="folder-panel" aria-expanded="false">文件夹</button>
+      </header>
+      <div class="sidebar-body" id="folder-panel">
+        <div class="folders-heading">
+          <h2>文件夹</h2>
+          <button class="text-button" id="rescan" type="button" disabled>重新扫描</button>
+        </div>
+        <button class="button primary add-button" type="button" data-pick>
+          <span aria-hidden="true">＋</span> 添加文件夹
+        </button>
+        <ul class="folder-list" id="folders"></ul>
+        <p class="quiet folder-hint" id="folder-hint">可在选择窗口中按住 Ctrl 选中多个文件夹。</p>
+        <section class="summary" aria-label="扫描统计" aria-live="polite">
+          <div><strong id="photo-count">0</strong><span>定位照片</span></div>
+          <div><strong id="skip-count">0</strong><span>无定位</span></div>
+          <p class="quiet" id="scan-summary" hidden></p>
+        </section>
+      </div>
+    </aside>
+
+    <section class="map-stage" id="map-stage" aria-label="全球照片地图">
+      <div id="map" aria-label="地图。方向键平移，加号和减号缩放。"></div>
+      <div class="map-toolbar">
+        <button class="button map-button" id="fit" type="button" disabled>
+          <span class="fit-icon" aria-hidden="true"></span> 查看全部
+        </button>
+        <div class="map-button basemap-control">
+          <label for="basemap">底图</label>
+          <select id="basemap">
+            <option value="osm">OpenStreetMap</option>
+            <option value="osm-de">OSM 全球备用（德国站）</option>
+          </select>
+        </div>
+        <button class="button map-button location-toggle" id="my-location" type="button"
+                aria-label="我的位置" aria-pressed="false">
+          <span class="location-icon" aria-hidden="true"></span>
+          <span id="location-label">我的位置</span>
+        </button>
+        <button class="button map-button tile-warning" id="retry-tiles" type="button" hidden>底图加载失败 · 重试</button>
+      </div>
+      <div class="empty-card" id="empty-map" hidden>
+        <span class="empty-mark" aria-hidden="true"><i></i></span>
+        <h2 id="empty-title">把照片放到地图上</h2>
+        <p id="empty-note">选择文件夹，查看照片的拍摄地点。</p>
+        <button class="button primary" id="empty-pick" type="button" data-pick>选择文件夹</button>
+      </div>
+      <div class="zoom-controls" aria-label="地图缩放">
+        <button id="zoom-in" type="button" aria-label="放大" title="放大 (+)">+</button>
+        <button id="zoom-out" type="button" aria-label="缩小" title="缩小 (−)">−</button>
+      </div>
+      <p class="map-keys" aria-hidden="true">方向键移动 · + / − 缩放</p>
+      <aside class="gallery" id="gallery" aria-labelledby="gallery-title" hidden>
+        <header class="gallery-header">
+          <div><h2 id="gallery-title"></h2><p class="quiet" id="gallery-location"></p></div>
+          <button class="icon-button" id="close-gallery" type="button" aria-label="关闭照片集合">×</button>
+        </header>
+        <div class="gallery-grid" id="gallery-grid"></div>
+      </aside>
+      <p class="toast" id="toast" role="status" hidden></p>
+    </section>
+  </main>
+
+  <dialog id="viewer" class="viewer" aria-labelledby="viewer-title">
+    <header class="viewer-header">
+      <div><h2 id="viewer-title"></h2><p id="viewer-position"></p></div>
+      <button class="icon-button" id="close-viewer" type="button" aria-label="关闭预览" autofocus>×</button>
+    </header>
+    <div class="viewer-stage">
+      <button class="viewer-arrow" id="previous" type="button" aria-label="上一张照片">‹</button>
+      <img id="full-image" alt="">
+      <p id="preview-error" hidden>无法预览此照片。可以尝试用默认应用打开原图。</p>
+      <button class="viewer-arrow" id="next" type="button" aria-label="下一张照片">›</button>
+    </div>
+    <footer class="viewer-footer">
+      <p id="viewer-details"></p>
+      <div class="viewer-actions">
+        <button class="button secondary" id="reveal" type="button">在资源管理器中定位</button>
+        <button class="button primary" id="open-original" type="button">用默认应用打开</button>
+      </div>
+      <p id="viewer-status" role="status" hidden></p>
+    </footer>
+  </dialog>
+</body>
+</html>
