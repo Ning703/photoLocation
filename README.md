@@ -1,36 +1,40 @@
-# 照片地图
+# Photo Location
 
-在 Windows 上用浏览器浏览本地照片的拍摄地点。应用提供两个 OpenStreetMap 全球底图来源，照片和索引保留在本机。
+[简体中文](README.zh-CN.md)
 
-## 启动
+Browse where your local photos were taken on a map in your browser on Windows. The app offers two global OpenStreetMap basemap sources. Your photos and photo index stay on your computer.
 
-需要 Windows、Windows PowerShell 5.1 或 PowerShell 7、Python 3.9 或更新版本，以及 Edge 或 Chrome。第一次在一台电脑上运行时，在项目目录执行：
+## Getting started
+
+You'll need Windows, Windows PowerShell 5.1 or PowerShell 7, Python 3.9 or later, and Edge or Chrome. On a new computer, run this command from the project directory.
 
 ~~~powershell
 .\start.ps1 -Repair
 ~~~
 
-此命令使用本机 Python 新建虚拟环境，安装图像处理依赖后启动应用。以后直接运行 .\start.ps1。迁移项目时，在目标电脑重新创建虚拟环境。遇到 Pillow 的 _imaging 导入错误，也可以运行 .\start.ps1 -Repair，原有环境会保存到 .venv-backup-*。
+This creates a virtual environment, installs the image-processing dependencies, and starts the app. For subsequent launches, run `.\start.ps1`. If Pillow reports an `_imaging` import error, run `.\start.ps1 -Repair` to rebuild the environment. The script saves the previous environment in a `.venv-backup-*` directory.
 
-启动后会用系统默认浏览器打开页面，也可以把终端显示的本机地址粘贴到 Edge 或 Chrome。按 Ctrl+C 停止。用 .\start.ps1 -Port 8765 -NoBrowser 可以指定端口并手动打开页面。
+The app opens in your default browser. You can also paste the local address shown in the terminal into Edge or Chrome. Press Ctrl+C in the terminal to stop the app. Run `.\start.ps1 -Port 8765 -NoBrowser` to set the port and open the page manually.
 
-## 使用
+## Using the app
 
-1. 点击「添加文件夹」。在 Windows 对话框中按住 Ctrl 多选，或分次添加不同位置的目录。应用会递归扫描。勾选文件夹即可切换地图上的照片，点击行尾的 × 可移除该目录。
-2. 拖动地图移动、滚轮缩放，也可以聚焦地图后使用方向键和 + / −。点击「查看全部」重新框选当前照片。照片在缩小时聚合，放大时重新分组。
-3. 点击地图上的照片卡片查看组内照片。照片按拍摄日期分组，同一天内按拍摄时间倒序。滚动时，当前日期以 YYYY-MM-DD 固定在列表顶部。点击照片放大并查看文件名，左右方向键切换。可以在资源管理器中选中原文件，或交给系统默认应用打开。
-4. 应用会将已添加的文件夹路径和勾选状态保存在项目目录的 photo-folders.local.json。下次启动时自动恢复列表并扫描照片。源目录增加、移动或删除照片后，也可以点击「重新扫描」。
-5. 点击地图左上角的「我的位置」，并在浏览器提示时允许定位。蓝点显示当前位置，再点击一次即可关闭。定位开关在打开页面时默认为关闭。
+The interface uses Chinese labels. The steps below include the labels as they appear in the app.
 
-定位来自照片内的 EXIF GPS，支持 JPEG、PNG、WebP、TIFF、AVIF 和 HEIC/HEIF。经纬度同时为 0 的照片计入「无定位」。GPS 默认按 WGS‑84 与 OpenStreetMap 对齐，境内外使用相同坐标处理。底图采用 Web Mercator，超出南北约 85.05° 的标记显示在地图边缘，预览仍显示实际纬度。
+1. Click **添加文件夹** (Add folders). Hold Ctrl in the Windows dialog to select multiple folders, or add folders one at a time. The app scans each folder recursively. Use the checkboxes to control which folders appear on the map, and click × to remove a folder.
+2. Drag the map to pan and use the mouse wheel to zoom. With the map focused, use the arrow keys to pan and + or − to zoom. Click **查看全部** (Fit all) to show all currently selected photos. Photos cluster as you zoom out and regroup as you zoom in.
+3. Click a photo card on the map to open its group. The gallery groups photos by date and shows the newest first within each day. The current date stays visible at the top as you scroll. Click a photo to enlarge it and see its filename. Use the left and right arrow keys to move between photos, or use the viewer buttons to locate the original in File Explorer or open it in the default app.
+4. The app saves the folder paths and checkbox states in `photo-folders.local.json` in the project directory. It restores the list and scans the folders at startup. After adding, moving, or removing photos, click **重新扫描** (Rescan) to refresh the map.
+5. Click **我的位置** (My location) and allow location access when the browser prompts you. A blue dot marks your position. Click the button again to turn location off. It starts off each time you open the page.
 
-底图访问需要网络。原站加载失败时，可在地图左上角的「底图」下拉菜单选「OSM 全球备用（德国站）」。德国站由 FOSSGIS 运营，覆盖全球，供个人非商业浏览，无需密钥。[德国站使用条款](https://openstreetmap.de/germanstyle/#nutzungsbedingungen)
+The app reads EXIF GPS metadata from JPEG, PNG, WebP, TIFF, AVIF, and HEIC/HEIF photos. Photos with both latitude and longitude set to zero count as having no location. Coordinates use WGS 84 worldwide. The Web Mercator basemap displays points beyond about 85.05° north or south at the edge of the map, and the photo preview shows their actual latitude.
 
-当前底图服务会收到浏览区域的瓦片请求。瓦片失败时可以切换来源或重试，仍可浏览已经导入的照片。Leaflet 1.9.4 随应用提供，许可证见 web/vendor/leaflet/LICENSE。
+Basemap tiles require an internet connection. If the default source fails to load, choose **OSM 全球备用（德国站）** (OSM global fallback) from **底图** (Basemap). FOSSGIS operates the fallback, which offers global coverage for personal, noncommercial browsing without an API key. [Fallback tile usage terms](https://openstreetmap.de/germanstyle/#nutzungsbedingungen)
 
-## 验证
+The selected basemap provider receives tile requests for the area you're viewing. If tiles fail to load, you can switch sources or retry while continuing to browse imported photos. The app bundles Leaflet 1.9.4. [Leaflet license](web/vendor/leaflet/LICENSE)
 
-可以选择本地照片文件夹做导入测试。若本地已有 `testPic`，也可以选择其中的 `02`、`05`、`Folder01` 或 `Folder03`。自动化测试使用临时生成的照片。
+## Testing
+
+For a manual check, click **添加文件夹** (Add folders) and select any local folder containing photos with EXIF GPS metadata. `testPic/` is an optional local directory that Git ignores. If it exists, the folder picker opens there. The automated tests generate their own temporary photos.
 
 ~~~powershell
 .\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
