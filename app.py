@@ -35,8 +35,10 @@ class PhotoMapServer(ThreadingHTTPServer):
         self.powershell = powershell
         self.picker_lock = threading.Lock()
 
-    def choose_folders(self):
+    def choose_folders(self, language='zh-CN'):
         args = [self.powershell, '-NoLogo', '-NoProfile', '-STA', '-File', str(ROOT / 'pick-folders.ps1')]
+        if language == 'en':
+            args += ['-Title', 'Select photo folders']
         sample = ROOT / 'testPic'
         if sample.is_dir():
             args += ['-InitialDirectory', str(sample)]
@@ -73,13 +75,13 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(status, json.dumps(value, ensure_ascii=False).encode('utf-8'),
                    'application/json; charset=utf-8')
 
-    def fail(self, status, message):
-        self.send_json({'error': message}, status)
+    def fail(self, status, code, message):
+        self.send_json({'error': message, 'errorCode': code}, status)
 
     def valid_host(self):
         if self.headers.get('Host') == self.server.host:
             return True
-        self.fail(HTTPStatus.FORBIDDEN, '请使用应用启动时显示的本机地址。')
+        self.fail(HTTPStatus.FORBIDDEN, 'invalidHost', '请使用应用启动时显示的本机地址。')
         return False
 
     def authenticated(self):
@@ -89,7 +91,7 @@ class Handler(BaseHTTPRequestHandler):
                 return True
         except CookieError:
             pass
-        self.fail(HTTPStatus.FORBIDDEN, '本机会话已失效，请刷新页面。')
+        self.fail(HTTPStatus.FORBIDDEN, 'expiredSession', '本机会话已失效，请刷新页面。')
         return False
 
     def do_GET(self):
@@ -102,7 +104,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         asset = (WEB / ('index.html' if path == '/' else path.lstrip('/'))).resolve()
         if not asset.is_relative_to(WEB) or not asset.is_file():
-            self.fail(HTTPStatus.NOT_FOUND, '页面不存在。')
+            self.fail(HTTPStatus.NOT_FOUND, 'pageNotFound', '页面不存在。')
             return
         media_type = 'text/javascript' if asset.suffix in {'.js', '.mjs'} else mimetypes.guess_type(asset)[0]
         media_type = media_type or 'application/octet-stream'
@@ -116,19 +118,19 @@ class Handler(BaseHTTPRequestHandler):
             return
         parts = path.split('/')
         if len(parts) != 5 or parts[2] != 'photos' or parts[4] not in {'thumbnail', 'preview'}:
-            self.fail(HTTPStatus.NOT_FOUND, '请求不存在。')
+            self.fail(HTTPStatus.NOT_FOUND, 'requestNotFound', '请求不存在。')
             return
         try:
             photo = self.server.catalog.photo(parts[3])
             info = validate_file(photo.path)
         except (KeyError, OSError, RuntimeError):
-            self.fail(HTTPStatus.NOT_FOUND, '照片已移除或文件位置已变化。')
+            self.fail(HTTPStatus.NOT_FOUND, 'photoMissing', '照片已移除或文件位置已变化。')
             return
         try:
             size = 320 if parts[4] == 'thumbnail' else 1600
             data = resized_jpeg(photo.path, size, info.st_mtime_ns, info.st_size)
         except Exception:
-            self.fail(HTTPStatus.UNPROCESSABLE_ENTITY, '照片无法预览。')
+            self.fail(HTTPStatus.UNPROCESSABLE_ENTITY, 'photoPreviewFailed', '照片无法预览。')
             return
         self.reply(HTTPStatus.OK, data, 'image/jpeg')
 
@@ -136,7 +138,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.valid_host():
             return
         if self.headers.get('Origin') != self.server.origin:
-            self.fail(HTTPStatus.FORBIDDEN, '请求必须来自当前本机页面。')
+            self.fail(HTTPStatus.FORBIDDEN, 'invalidOrigin', '请求必须来自当前本机页面。')
             return
         if not self.authenticated():
             return
@@ -148,14 +150,14 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 raise ValueError()
         except (ValueError, UnicodeError):
-            self.fail(HTTPStatus.BAD_REQUEST, '请求格式无效。')
+            self.fail(HTTPStatus.BAD_REQUEST, 'invalidRequest', '请求格式无效。')
             return
         self.post_api(urlsplit(self.path).path, payload)
 
     def post_api(self, path, payload):
         catalog = self.server.catalog
         if path == '/api/folders/pick':
-            self.pick()
+            self.pick(payload.get('language'))
             return
         if path == '/api/folders/rescan':
             catalog.rescan()
@@ -177,21 +179,21 @@ class Handler(BaseHTTPRequestHandler):
                     self.open_photo(catalog.photo(item_id), action)
                     return
             except KeyError:
-                self.fail(HTTPStatus.NOT_FOUND, '该项目已从相册移除。')
+                self.fail(HTTPStatus.NOT_FOUND, 'itemMissing', '该项目已从相册移除。')
                 return
-        self.fail(HTTPStatus.NOT_FOUND, '请求不存在。')
+        self.fail(HTTPStatus.NOT_FOUND, 'requestNotFound', '请求不存在。')
 
-    def pick(self):
+    def pick(self, language):
         if not self.server.picker_lock.acquire(blocking=False):
-            self.fail(HTTPStatus.CONFLICT, '文件夹选择窗口已经打开。')
+            self.fail(HTTPStatus.CONFLICT, 'pickerBusy', '文件夹选择窗口已经打开。')
             return
         try:
-            paths = self.server.choose_folders()
+            paths = self.server.choose_folders(language)
             added, rejected = self.server.catalog.add(paths)
             self.send_json(dict(added=added, rejected=rejected, cancelled=not paths,
                                 catalog=self.server.catalog.snapshot()))
         except (OSError, ValueError, subprocess.SubprocessError):
-            self.fail(HTTPStatus.SERVICE_UNAVAILABLE, '无法打开文件夹选择窗口。请在 Windows 上重新启动应用。')
+            self.fail(HTTPStatus.SERVICE_UNAVAILABLE, 'pickerFailed', '无法打开文件夹选择窗口。请在 Windows 上重新启动应用。')
         finally:
             self.server.picker_lock.release()
 
@@ -199,7 +201,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             validate_file(photo.path)
         except (OSError, RuntimeError):
-            self.fail(HTTPStatus.NOT_FOUND, '找不到原图，请重新扫描文件夹。')
+            self.fail(HTTPStatus.NOT_FOUND, 'originalMissing', '找不到原图，请重新扫描文件夹。')
             return
         try:
             if action == 'open':
@@ -208,7 +210,7 @@ class Handler(BaseHTTPRequestHandler):
                 explorer = Path(os.environ['SystemRoot']) / 'explorer.exe'
                 subprocess.Popen(f'"{explorer}" /select,"{photo.path}"', executable=str(explorer))
         except OSError:
-            self.fail(HTTPStatus.SERVICE_UNAVAILABLE, 'Windows 无法执行此操作，请检查默认应用与文件权限。')
+            self.fail(HTTPStatus.SERVICE_UNAVAILABLE, 'nativeActionFailed', 'Windows 无法执行此操作，请检查默认应用与文件权限。')
             return
         self.send_json({'ok': True})
 

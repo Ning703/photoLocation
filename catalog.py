@@ -169,6 +169,13 @@ class Folder:
     result: ScanResult = field(default_factory=ScanResult)
 
 
+FOLDER_MEMORY_ERRORS = {
+    'folderMemoryRead': '无法读取上次打开的文件夹列表。',
+    'folderMemoryPartial': '无法读取部分已记忆的文件夹。',
+    'folderMemoryWrite': '无法保存文件夹列表。',
+}
+
+
 class Catalog:
     def __init__(self, folder_state_path=None):
         self.lock = RLock()
@@ -190,19 +197,19 @@ class Catalog:
         except FileNotFoundError:
             return
         except (OSError, ValueError, RecursionError):
-            self.folder_memory_error = '无法读取上次打开的文件夹列表。'
+            self.folder_memory_error = 'folderMemoryRead'
             return
 
         known = set()
         with self.lock:
             for record in records:
                 if not isinstance(record, dict) or not isinstance(record.get('path'), str):
-                    self.folder_memory_error = '无法读取部分已记忆的文件夹。'
+                    self.folder_memory_error = 'folderMemoryPartial'
                     continue
                 root = Path(record['path'])
                 enabled = record.get('enabled')
                 if not root.is_absolute() or not isinstance(enabled, bool):
-                    self.folder_memory_error = '无法读取部分已记忆的文件夹。'
+                    self.folder_memory_error = 'folderMemoryPartial'
                     continue
                 key = path_key(root)
                 if key in known:
@@ -228,7 +235,7 @@ class Catalog:
                 os.fsync(temporary.fileno())
             temporary_path.replace(target)
         except (OSError, UnicodeError):
-            self.folder_memory_error = '无法保存文件夹列表。'
+            self.folder_memory_error = 'folderMemoryWrite'
             if temporary_path is not None:
                 try:
                     temporary_path.unlink(missing_ok=True)
@@ -325,5 +332,6 @@ class Catalog:
             )
             return dict(revision=self.revision, folders=folders, photos=photos, stats=stats,
                         scanning=any(folder.scanning for folder in self.folders.values()),
-                        folderMemoryError=self.folder_memory_error,
+                        folderMemoryError=FOLDER_MEMORY_ERRORS.get(self.folder_memory_error),
+                        folderMemoryErrorCode=self.folder_memory_error,
                         heifAvailable=register_heif_opener is not None)

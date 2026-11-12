@@ -2,6 +2,10 @@ import {
   CARD_HEIGHT, CARD_WIDTH, comparePhotos, displayLatitude,
   groupPoints, longitudeExtent, nearestLongitude,
 } from './map-layout.mjs';
+import { savedLanguage, saveLanguage, translate } from './language.mjs';
+
+let language = savedLanguage();
+const t = (key, ...args) => translate(language, key, ...args);
 
 const byId = id => document.getElementById(id);
 const mapElement = byId('map');
@@ -64,6 +68,8 @@ let mapFrame = 0;
 let zooming = false;
 let polling;
 let toastTimeout;
+let toastMessage;
+let locationLabelKey = 'myLocation';
 let locationWatch = null;
 let locationMarker = null;
 
@@ -92,16 +98,26 @@ async function api(path, data) {
   };
   const response = await fetch('/api' + path, options);
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || '操作失败。');
+  if (!response.ok) {
+    const error = new Error(result.error);
+    error.code = result.errorCode;
+    throw error;
+  }
   return result;
 }
 
-function showToast(message) {
+function showToast(key, ...args) {
+  toastMessage = [key, ...args];
   clearTimeout(toastTimeout);
   const toast = byId('toast');
-  toast.textContent = message;
+  toast.textContent = t(...toastMessage);
   toast.hidden = false;
   toastTimeout = setTimeout(() => { toast.hidden = true; }, 3800);
+}
+
+function setLocationLabel(key) {
+  locationLabelKey = key;
+  locationLabel.textContent = t(key);
 }
 
 function stopLocation() {
@@ -110,13 +126,13 @@ function stopLocation() {
   locationMarker?.remove();
   locationMarker = null;
   locationButton.setAttribute('aria-pressed', 'false');
-  locationLabel.textContent = '我的位置';
+  setLocationLabel('myLocation');
   renderEmpty();
 }
 
 function showLocation({ coords }) {
   const point = L.latLng(displayLatitude(coords.latitude), nearestLongitude(coords.longitude, map.getCenter().lng));
-  locationLabel.textContent = '我的位置';
+  setLocationLabel('myLocation');
   if (locationMarker) {
     locationMarker.setLatLng(point);
     return;
@@ -134,22 +150,22 @@ function showLocation({ coords }) {
     maxZoom: Math.max(15, map.getZoom()),
     animate: false,
   });
-  showToast('已定位到当前位置。');
+  showToast('locationFound');
 }
 
 function toggleLocation() {
   if (locationWatch !== null) {
     stopLocation();
-    showToast('已关闭定位。');
+    showToast('locationOff');
     return;
   }
   if (!window.isSecureContext || !navigator.geolocation) {
-    showToast('当前页面无法使用定位，请用 Edge 或 Chrome 打开应用的本机地址。');
+    showToast('locationUnavailable');
     return;
   }
 
   locationButton.setAttribute('aria-pressed', 'true');
-  locationLabel.textContent = '定位中…';
+  setLocationLabel('locating');
   const watch = navigator.geolocation.watchPosition(
     position => {
       if (locationWatch === watch) showLocation(position);
@@ -158,10 +174,10 @@ function toggleLocation() {
       if (locationWatch !== watch) return;
       if (error.code === GeolocationPositionError.PERMISSION_DENIED) {
         stopLocation();
-        showToast('定位权限未开启，请检查浏览器和 Windows 的位置权限。');
+        showToast('locationDenied');
       } else {
-        locationLabel.textContent = '等待定位…';
-        showToast(locationMarker ? '定位暂时不可用，蓝点为上次位置。' : '暂时无法获取位置，正在等待定位。');
+        setLocationLabel('locationWaiting');
+        showToast(locationMarker ? 'lastLocation' : 'waitingForLocation');
       }
     },
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
@@ -187,28 +203,30 @@ function renderFolders() {
     checkbox.type = 'checkbox';
     checkbox.checked = folder.enabled;
     checkbox.dataset.folderControl = 'include-' + folder.id;
-    checkbox.setAttribute('aria-label', '显示 ' + folder.name);
+    checkbox.setAttribute('aria-label', t('showFolder', folder.name));
     checkbox.addEventListener('change', async () => {
       try {
         await mutateFolder(folder.id, 'enabled', { enabled: checkbox.checked });
       } catch (error) {
         checkbox.checked = folder.enabled;
-        showToast(error.message);
+        showToast(error.code ?? 'requestFailed');
       }
     });
     const copy = element('span', 'folder-copy');
-    const meta = folder.scanning ? '正在扫描…' : folder.located + ' 张定位照片' +
-      (folder.withoutGps ? ' · ' + folder.withoutGps + ' 张无定位' : '') +
-      (folder.inaccessible ? ' · 有路径无法访问' : '');
+    const meta = folder.scanning ? t('scanning') : [
+      t('locatedCount', folder.located),
+      folder.withoutGps && t('noGpsCount', folder.withoutGps),
+      folder.inaccessible && t('inaccessibleFolder'),
+    ].filter(Boolean).join(' · ');
     copy.append(element('span', 'folder-name', folder.name), element('span', 'folder-meta', meta));
     label.append(checkbox, copy);
     const remove = element('button', 'icon-button', '×');
     remove.type = 'button';
     remove.dataset.folderControl = 'remove-' + folder.id;
-    remove.setAttribute('aria-label', '移除 ' + folder.name);
-    remove.title = '移除文件夹';
+    remove.setAttribute('aria-label', t('removeNamedFolder', folder.name));
+    remove.title = t('removeFolder');
     remove.addEventListener('click', () => {
-      mutateFolder(folder.id, 'remove', {}).catch(error => showToast(error.message));
+      mutateFolder(folder.id, 'remove', {}).catch(error => showToast(error.code ?? 'requestFailed'));
     });
     item.append(label, remove);
     return item;
@@ -224,11 +242,11 @@ function renderFolders() {
   byId('skip-count').textContent = state.stats?.withoutGps ?? 0;
   const summary = byId('scan-summary');
   const messages = [];
-  if (state.scanning) messages.push('正在扫描所选文件夹…');
-  if (state.stats?.unreadable) messages.push(state.stats.unreadable + ' 个文件无法读取');
-  if (state.stats?.inaccessible) messages.push(state.stats.inaccessible + ' 个目录或项目无法访问');
-  if (state.folderMemoryError) messages.push(state.folderMemoryError);
-  if (state.heifAvailable === false) messages.push('缺少 HEIC 支持，请安装 requirements.txt 中的依赖。');
+  if (state.scanning) messages.push(t('scanningFolders'));
+  if (state.stats?.unreadable) messages.push(t('unreadableCount', state.stats.unreadable));
+  if (state.stats?.inaccessible) messages.push(t('inaccessibleCount', state.stats.inaccessible));
+  if (state.folderMemoryErrorCode) messages.push(t(state.folderMemoryErrorCode));
+  if (state.heifAvailable === false) messages.push(t('heifUnavailable'));
   summary.textContent = messages.join(' · ');
   summary.hidden = !messages.length;
 }
@@ -242,17 +260,17 @@ function renderEmpty() {
   const pick = byId('empty-pick');
   pick.hidden = state.scanning;
   if (state.scanning) {
-    title.textContent = '正在读取照片';
-    note.textContent = '正在查找所选文件夹内的 GPS 信息。';
+    title.textContent = t('readingPhotos');
+    note.textContent = t('readingGps');
   } else if (state.folders.length && !state.folders.some(folder => folder.enabled)) {
-    title.textContent = '未选中文件夹';
-    note.textContent = '勾选一个文件夹来显示其中的定位照片。';
+    title.textContent = t('noFoldersSelected');
+    note.textContent = t('selectFolderHint');
   } else if (state.folders.length) {
-    title.textContent = '没有找到定位照片';
-    note.textContent = '请选择包含 GPS 拍摄信息的照片文件夹。';
+    title.textContent = t('noPhotosFound');
+    note.textContent = t('selectGpsFolder');
   } else {
-    title.textContent = '把照片放到地图上';
-    note.textContent = '选择文件夹，查看照片的拍摄地点。';
+    title.textContent = t('emptyTitle');
+    note.textContent = t('emptyNote');
   }
 }
 
@@ -282,7 +300,7 @@ async function loadCatalog() {
     updateState(snapshot);
     if (state.scanning && previous === state.revision) polling = setTimeout(loadCatalog, 380);
   } catch (error) {
-    showToast(error.message);
+    showToast(error.code ?? 'requestFailed');
     if (state.scanning) polling = setTimeout(loadCatalog, 1500);
   }
 }
@@ -294,16 +312,16 @@ async function mutateFolder(id, action, data) {
 async function pickFolders() {
   const buttons = document.querySelectorAll('[data-pick]');
   for (const button of buttons) button.disabled = true;
-  showToast('请选择要导入的文件夹。');
+  showToast('chooseImportFolders');
   try {
-    const result = await api('/folders/pick', {});
+    const result = await api('/folders/pick', { language });
     updateState(result.catalog);
-    if (result.rejected) showToast(result.rejected + ' 个文件夹无法访问。');
-    else if (result.added) showToast('已添加 ' + result.added + ' 个文件夹。');
-    else if (!result.cancelled) showToast('所选文件夹已在列表中。');
+    if (result.rejected) showToast('rejectedFolders', result.rejected);
+    else if (result.added) showToast('addedFolders', result.added);
+    else if (!result.cancelled) showToast('existingFolders');
     else byId('toast').hidden = true;
   } catch (error) {
-    showToast(error.message);
+    showToast(error.code ?? 'requestFailed');
   } finally {
     for (const button of buttons) button.disabled = false;
   }
@@ -332,14 +350,18 @@ function photoUrl(photo, size) {
   return '/api/photos/' + photo.id + '/' + size;
 }
 
+function labelMarker(button, count) {
+  button.title = t('photoCount', count);
+  button.setAttribute('aria-label', t('viewPhotosHere', count));
+}
+
 function markerButton(group) {
   const photo = group.anchor.photo;
   const total = group.photos.length;
   const button = element('button', 'marker-card');
   button.type = 'button';
   button.dataset.photo = photo.id;
-  button.title = total + ' 张照片';
-  button.setAttribute('aria-label', '查看此处的 ' + total + ' 张照片');
+  labelMarker(button, total);
   const frame = element('span', 'marker-frame');
   const crop = element('span', 'marker-photo');
   const image = element('img');
@@ -409,7 +431,7 @@ function coordinates(photo) {
 function openGallery(group, trigger) {
   galleryItems = group.photos;
   galleryTrigger = trigger;
-  byId('gallery-title').textContent = group.photos.length + ' 张照片';
+  byId('gallery-title').textContent = t('photoCount', galleryItems.length);
   byId('gallery-location').textContent = coordinates(group.anchor.photo);
   const items = document.createDocumentFragment();
   let previousDay;
@@ -424,7 +446,8 @@ function openGallery(group, trigger) {
         date.dateTime = day;
         heading.append(date);
       } else {
-        heading.textContent = '拍摄日期未知';
+        heading.dataset.text = 'dateUnknown';
+        heading.textContent = t('dateUnknown');
       }
       dayPhotos = element('div', 'gallery-photos');
       section.append(heading, dayPhotos);
@@ -434,7 +457,7 @@ function openGallery(group, trigger) {
 
     const button = element('button', 'gallery-item');
     button.type = 'button';
-    button.setAttribute('aria-label', '预览第 ' + (index + 1) + ' 张照片');
+    button.setAttribute('aria-label', t('previewPhoto', index + 1));
     const thumbnail = element('span', 'gallery-thumbnail');
     const image = element('img');
     image.alt = '';
@@ -467,15 +490,21 @@ function closeGallery(restoreFocus = true) {
   galleryTrigger = null;
 }
 
+function renderViewerDetails(photo) {
+  const date = photo.capturedAt?.replace('T', ' ');
+  const outside = displayLatitude(photo.lat) !== photo.lat;
+  byId('viewer-details').textContent = [
+    coordinates(photo), date, outside && t('polarMarker'),
+  ].filter(Boolean).join('  ·  ');
+}
+
 function showPhoto(index) {
   if (index < 0 || index >= galleryItems.length) return;
   viewerIndex = index;
   const photo = galleryItems[index];
   byId('viewer-title').textContent = photo.name;
   byId('viewer-position').textContent = (index + 1) + ' / ' + galleryItems.length;
-  const date = photo.capturedAt?.replace('T', ' ');
-  const outside = displayLatitude(photo.lat) !== photo.lat ? ' · 标记显示在极区边缘' : '';
-  byId('viewer-details').textContent = coordinates(photo) + (date ? '  ·  ' + date : '') + outside;
+  renderViewerDetails(photo);
   byId('viewer-status').hidden = true;
   byId('preview-error').hidden = true;
   fullImage.hidden = false;
@@ -495,9 +524,9 @@ async function nativeAction(action) {
   const status = byId('viewer-status');
   try {
     await api('/photos/' + photo.id + '/' + action, {});
-    status.textContent = action === 'open' ? '已请求 Windows 打开原图。' : '已请求 Windows 定位原图。';
+    status.textContent = t(action === 'open' ? 'originalOpened' : 'originalRevealed');
   } catch (error) {
-    status.textContent = error.message;
+    status.textContent = t(error.code ?? 'requestFailed');
   }
   status.hidden = false;
 }
@@ -522,7 +551,7 @@ byId('rescan').addEventListener('click', async () => {
   try {
     updateState(await api('/folders/rescan', {}));
   } catch (error) {
-    showToast(error.message);
+    showToast(error.code ?? 'requestFailed');
   }
 });
 byId('toggle-folders').addEventListener('click', event => {
@@ -557,4 +586,38 @@ document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && !viewer.open && !gallery.hidden) closeGallery();
 });
 
+function applyLanguage() {
+  document.documentElement.lang = language;
+  document.title = t('appTitle');
+  for (const node of document.querySelectorAll('[data-text]')) node.textContent = t(node.dataset.text);
+  for (const node of document.querySelectorAll('[data-label]')) node.setAttribute('aria-label', t(node.dataset.label));
+  for (const node of document.querySelectorAll('[data-title]')) node.title = t(node.dataset.title);
+
+  const nextLanguage = byId('language-toggle').firstElementChild;
+  nextLanguage.lang = language === 'en' ? 'zh-CN' : 'en';
+  nextLanguage.textContent = language === 'en' ? '简体中文' : 'English';
+  setLocationLabel(locationLabelKey);
+  renderFolders();
+  renderEmpty();
+  for (const button of mapElement.querySelectorAll('.marker-card')) {
+    labelMarker(button, Number(button.querySelector('.marker-count').textContent));
+  }
+  if (!gallery.hidden) {
+    byId('gallery-title').textContent = t('photoCount', galleryItems.length);
+    gallery.querySelectorAll('.gallery-item').forEach((button, index) => {
+      button.setAttribute('aria-label', t('previewPhoto', index + 1));
+    });
+  }
+  if (viewer.open) renderViewerDetails(galleryItems[viewerIndex]);
+  const toast = byId('toast');
+  if (!toast.hidden && toastMessage) toast.textContent = t(...toastMessage);
+}
+
+byId('language-toggle').addEventListener('click', () => {
+  language = language === 'en' ? 'zh-CN' : 'en';
+  saveLanguage(language);
+  applyLanguage();
+});
+
+applyLanguage();
 loadCatalog();

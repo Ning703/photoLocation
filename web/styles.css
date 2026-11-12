@@ -47,7 +47,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   padding: 0 22px;
   border-bottom: 1px solid var(--line);
 }
-.sidebar-header h1 { font-size: 21px; font-weight: 750; letter-spacing: .025em; }
+.sidebar-header h1 { font-size: 21px; font-weight: 750; letter-spacing: .025em; line-height: 1.15; }
+.sidebar-header .language-button { flex: none; min-height: 34px; margin-left: auto; padding: 0 9px; }
 .brand-mark, .empty-mark {
   display: grid;
   place-items: center;
@@ -101,7 +102,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .text-button { padding: 4px 0; font-size: 12px; color: var(--blue); background: transparent; }
 .text-button:hover:not(:disabled) { text-decoration: underline; }
 .add-button { width: 100%; justify-content: flex-start; padding: 0 13px; }
-.add-button span { font-size: 19px; line-height: 1; }
+.add-button span[aria-hidden] { font-size: 19px; line-height: 1; }
 .folder-list { list-style: none; margin: 14px 0 0; padding: 0 3px; overflow: auto; }
 .folder-list:empty { margin-top: 0; }
 .folder-list li {
@@ -475,7 +476,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   .sidebar-header { min-height: 58px; gap: 9px; padding: 0 13px; border-bottom: 0; }
   .sidebar-header h1 { font-size: 17px; }
   .brand-mark { width: 33px; height: 33px; border-radius: 9px; }
-  .mobile-only { display: inline-flex; min-height: 34px; margin-left: auto; }
+  .mobile-only { display: inline-flex; min-height: 34px; }
   .sidebar-body { display: none; max-height: 43dvh; padding: 9px 13px 13px; }
   .sidebar.is-expanded .sidebar-body { display: flex; }
   .folders-heading { margin-bottom: 7px; }

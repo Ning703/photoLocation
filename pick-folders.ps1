@@ -1,8 +1,7 @@
-﻿param([string]$InitialDirectory)
+﻿param([string]$InitialDirectory, [string]$Title = '选择照片文件夹')
 
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-$title = '选择照片文件夹'
 
 if ($PSVersionTable.PSVersion -ge [version]'7.4') {
     Add-Type -AssemblyName PresentationFramework
