@@ -4,17 +4,23 @@
 
 Browse where your local photos were taken on a map in your browser on Windows. The app offers two global OpenStreetMap basemap sources. Your photos and photo index stay on your computer.
 
-## Getting started
+## Build and run
 
-You'll need Windows, Windows PowerShell 5.1 or PowerShell 7, Python 3.9 or later, and Edge or Chrome. On a new computer, run this command from the project directory.
+On Windows x64, install a current stable Rust toolchain with its matching linker and add NASM to PATH for the AVIF decoder. From the repository directory, build and launch the app.
 
 ~~~powershell
-.\start.ps1 -Repair
+cargo build --release --locked
+Copy-Item .\target\release\photo-location.exe .
+.\photo-location.exe
 ~~~
 
-This creates a virtual environment, installs the image-processing dependencies, and starts the app. For subsequent launches, run `.\start.ps1`. If Pillow reports an `_imaging` import error, run `.\start.ps1 -Repair` to rebuild the environment. The script saves the previous environment in a `.venv-backup-*` directory.
+The EXE includes the web assets and image decoders. It opens the default browser and prints the local address. Press Ctrl+C in the terminal to stop the app.
 
-The app opens in your default browser. You can also paste the local address shown in the terminal into Edge or Chrome. Press Ctrl+C in the terminal to stop the app. Run `.\start.ps1 -Port 8765 -NoBrowser` to set the port and open the page manually.
+~~~powershell
+.\photo-location.exe --port 8765 --no-browser
+~~~
+
+A fixed port lets the browser remember its language preference across restarts.
 
 ## Using the app
 
@@ -31,12 +37,3 @@ The app reads EXIF GPS metadata from JPEG, PNG, WebP, TIFF, AVIF, and HEIC/HEIF 
 Basemap tiles require an internet connection. If the default source fails to load, choose **OSM global fallback** from **Basemap**. FOSSGIS operates the fallback, which offers global coverage for personal, noncommercial browsing without an API key. [Fallback tile usage terms](https://openstreetmap.de/germanstyle/#nutzungsbedingungen)
 
 The selected basemap provider receives tile requests for the area you're viewing. If tiles fail to load, you can switch sources or retry while continuing to browse imported photos. The app bundles Leaflet 1.9.4. [Leaflet license](web/vendor/leaflet/LICENSE)
-
-## Testing
-
-For a manual check, click **Add folders** and select any local folder containing photos with EXIF GPS metadata. `testPic/` is an optional local directory that Git ignores. If it exists, the folder picker opens there. The automated tests generate their own temporary photos.
-
-~~~powershell
-.\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
-node --test tests/map-layout.test.mjs
-~~~

@@ -4,17 +4,23 @@
 
 在 Windows 上用浏览器浏览本地照片的拍摄地点。应用提供两个 OpenStreetMap 全球底图来源，照片和索引保留在本机。
 
-## 启动
+## 构建与启动
 
-需要 Windows、Windows PowerShell 5.1 或 PowerShell 7、Python 3.9 或更新版本，以及 Edge 或 Chrome。第一次在一台电脑上运行时，在项目目录执行以下命令。
+在 Windows x64 上准备当前稳定版的 Rust 工具链及对应链接器，并将 AVIF 解码器构建所需的 NASM 加入 PATH。在仓库目录中构建并运行。
 
 ~~~powershell
-.\start.ps1 -Repair
+cargo build --release --locked
+Copy-Item .\target\release\photo-location.exe .
+.\photo-location.exe
 ~~~
 
-此命令使用本机 Python 新建虚拟环境，安装图像处理依赖后启动应用。以后直接运行 `.\start.ps1`。迁移项目时，在目标电脑重新创建虚拟环境。遇到 Pillow 的 `_imaging` 导入错误，也可以运行 `.\start.ps1 -Repair`，原有环境会保存到 `.venv-backup-*`。
+EXE 已包含网页资源和图像解码器。程序会打开默认浏览器，并在终端显示本机地址。按 Ctrl+C 停止。
 
-启动后会用系统默认浏览器打开页面，也可以把终端显示的本机地址粘贴到 Edge 或 Chrome。按 Ctrl+C 停止。用 `.\start.ps1 -Port 8765 -NoBrowser` 可以指定端口并手动打开页面。
+~~~powershell
+.\photo-location.exe --port 8765 --no-browser
+~~~
+
+使用固定端口可以让浏览器在重启后继续记住语言偏好。
 
 ## 使用
 
@@ -31,12 +37,3 @@
 底图访问需要网络。默认底图加载失败时，可在地图左上角的「底图」下拉菜单选「OSM 全球备用（德国站）」。德国站由 FOSSGIS 运营，覆盖全球，供个人非商业浏览，无需密钥。[德国站使用条款](https://openstreetmap.de/germanstyle/#nutzungsbedingungen)
 
 当前底图服务会收到浏览区域的瓦片请求。瓦片失败时可以切换来源或重试，仍可浏览已经导入的照片。应用内置 Leaflet 1.9.4。[Leaflet 许可证](web/vendor/leaflet/LICENSE)
-
-## 验证
-
-手动验证时，点击「添加文件夹」并选择任意包含带 EXIF GPS 照片的本地文件夹。`testPic/` 是可选的本地目录，由 Git 忽略。若它存在，文件夹选择器会从该目录打开。自动化测试会临时生成所需的测试照片。
-
-~~~powershell
-.\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
-node --test tests/map-layout.test.mjs
-~~~

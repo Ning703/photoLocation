@@ -1,6 +1,4 @@
-.venv/
-.venv-backup-*/
-photo-folders.local.json*
-__pycache__/
-*.pyc
+/target/
+/photo-location.exe
+/photo-folders.local.json*
 /testPic/
